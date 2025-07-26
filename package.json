@@ -1,6 +1,6 @@
 {
   "name": "repodigest",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Advanced CLI tool to analyze and create intelligent text digests of codebases for LLMs with enhanced features and better performance.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,10 @@
     "build": "tsc",
     "dev": "ts-node-esm src/index.ts",
     "prepublishOnly": "npm run build",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "version:patch": "node scripts/version-bump.js patch",
+    "version:minor": "node scripts/version-bump.js minor",
+    "version:major": "node scripts/version-bump.js major"
   },
   "keywords": [
     "repodigest",
@@ -27,26 +30,28 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.7.2",
     "boxen": "^8.0.1",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
+    "dotenv": "^17.2.0",
+    "fast-glob": "^3.3.2",
     "figlet": "^1.8.2",
     "ignore": "^7.0.5",
     "inquirer": "^12.8.0",
+    "mime-types": "^2.1.35",
     "ora": "^8.2.0",
     "simple-git": "^3.25.0",
-    "tiktoken": "^1.0.14",
-    "fast-glob": "^3.3.2",
-    "mime-types": "^2.1.35"
+    "tiktoken": "^1.0.14"
   },
   "devDependencies": {
     "@types/figlet": "^1.7.0",
     "@types/inquirer": "^9.0.8",
-    "@types/node": "^20.14.2",
     "@types/mime-types": "^2.1.4",
+    "@types/node": "^20.14.2",
+    "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5",
-    "rimraf": "^5.0.5"
+    "typescript": "^5.4.5"
   }
 }

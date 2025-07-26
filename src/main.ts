@@ -8,8 +8,10 @@ import { parseQuery, validateOptions } from './core/query-parser.js';
 import { RepositoryCloner } from './core/repository-cloner.js';
 import { FileProcessor } from './core/file-processor.js';
 import { OutputGenerator } from './core/output-generator.js';
+import { AIConfigManager } from './ai/config-manager.js';
+import { AIService } from './ai/ai-service.js';
 import { displaySuccess, displayError, displayWarning, displayInfo } from './utils/display.js';
-import type { CliOptions, DigestionQuery } from './types.js';
+import type { CliOptions, DigestionQuery, DigestOutput, FileNode } from './types.js';
 
 /**
  * Main application orchestrator
@@ -20,6 +22,28 @@ export async function main(source: string, options: CliOptions): Promise<void> {
   let spinner = ora();
 
   try {
+    // Handle AI configuration commands first
+    if (options.setupAi) {
+      await AIConfigManager.interactiveSetup();
+      return;
+    }
+
+    if (options.setApiKey) {
+      await AIConfigManager.saveApiKey(options.setApiKey);
+      displayInfo('✅ API key saved successfully!');
+      return;
+    }
+
+    if (options.showAiConfig) {
+      await AIConfigManager.showConfig();
+      return;
+    }
+
+    if (options.resetAiConfig) {
+      await AIConfigManager.clearConfig();
+      return;
+    }
+
     // Validate options
     const validationErrors = validateOptions(options);
     if (validationErrors.length > 0) {
@@ -51,8 +75,13 @@ export async function main(source: string, options: CliOptions): Promise<void> {
     // Generate output
     spinner.start('Generating digest...');
     const generator = new OutputGenerator(query, stats);
-    const output = generator.generate(rootNode);
+    let output = generator.generate(rootNode);
     spinner.succeed('Digest generated successfully');
+
+    // AI Analysis (if enabled)
+    if (options.aiAnalysis || options.aiSummary || options.securityScan) {
+      output = await performAIAnalysis(output, rootNode, options, spinner);
+    }
 
     // Handle output
     await handleOutput(output, query, spinner);
@@ -75,6 +104,141 @@ export async function main(source: string, options: CliOptions): Promise<void> {
       }
     }
   }
+}
+
+/**
+ * Perform AI analysis on the digest and files
+ */
+async function performAIAnalysis(
+  output: DigestOutput,
+  rootNode: FileNode,
+  options: CliOptions,
+  spinner: Ora
+): Promise<DigestOutput> {
+  try {
+    spinner.start('Initializing AI service...');
+    
+    // Initialize AI service
+    const aiService = new AIService();
+    const aiConfigOptions = {
+      apiKey: options.setApiKey || process.env.GEMINI_API_KEY
+    };
+    
+    const initialized = await aiService.initialize(aiConfigOptions);
+    if (!initialized) {
+      spinner.warn('AI service initialization failed. Skipping AI analysis.');
+      displayInfo('💡 Run with --setup-ai to configure AI settings.');
+      return output;
+    }
+
+    spinner.succeed('AI service initialized');
+
+    // Collect text files for analysis
+    const textFiles = collectTextFiles(rootNode);
+    const filesToAnalyze = textFiles.slice(0, 10); // Limit to first 10 files to avoid rate limits
+
+    let aiInsights: any = {
+      overview: null,
+      recommendations: [],
+      fileAnalyses: 0,
+      analysisMetadata: {
+        timestamp: new Date().toISOString(),
+        filesAnalyzed: 0,
+        totalFiles: textFiles.length
+      }
+    };
+
+    // Repository-level analysis
+    if (options.aiSummary) {
+      spinner.start('Generating AI repository summary...');
+      const repositoryAnalysis = await aiService.analyzeRepository(output);
+      if (repositoryAnalysis) {
+        aiInsights.overview = repositoryAnalysis;
+        aiInsights.recommendations = repositoryAnalysis.recommendations || [];
+      }
+      spinner.succeed('Repository summary generated');
+    }
+
+    // File-level analysis
+    if (options.aiAnalysis && filesToAnalyze.length > 0) {
+      spinner.start(`Analyzing ${filesToAnalyze.length} files with AI...`);
+      
+      const analysisType = options.securityScan ? 'security' : 'quality';
+      const fileAnalyses = await aiService.analyzeFiles(filesToAnalyze, analysisType);
+      
+      aiInsights.fileAnalyses = fileAnalyses.size;
+      aiInsights.analysisMetadata.filesAnalyzed = fileAnalyses.size;
+      
+      // Process successful analyses
+      const successfulAnalyses = Array.from(fileAnalyses.values()).filter(a => a.success);
+      if (successfulAnalyses.length > 0) {
+        // Extract recommendations from file analyses
+        const fileRecommendations = successfulAnalyses
+          .flatMap(analysis => analysis.analysis?.suggestions || [])
+          .slice(0, 10); // Limit recommendations
+        
+        aiInsights.recommendations.push(...fileRecommendations);
+      }
+      
+      spinner.succeed(`Analyzed ${successfulAnalyses.length} files with AI`);
+    }
+
+    // Security analysis
+    if (options.securityScan) {
+      spinner.start('Performing security analysis...');
+      
+      const securityFiles = textFiles.filter(f => 
+        f.language && ['JavaScript', 'TypeScript', 'Python', 'Java', 'PHP'].includes(f.language)
+      ).slice(0, 5);
+      
+      if (securityFiles.length > 0) {
+        const securityAnalyses = await aiService.analyzeFiles(securityFiles, 'security');
+        const securityResults = Array.from(securityAnalyses.values())
+          .filter(a => a.success && a.analysis?.security)
+          .map(a => a.analysis?.security);
+        
+        if (securityResults.length > 0) {
+          output.securityAnalysis = {
+            summary: `Analyzed ${securityResults.length} files for security issues`,
+            results: securityResults,
+            timestamp: new Date().toISOString()
+          };
+        }
+      }
+      
+      spinner.succeed('Security analysis completed');
+    }
+
+    // Add AI insights to output
+    output.aiInsights = aiInsights;
+
+    return output;
+
+  } catch (error) {
+    spinner.fail('AI analysis failed');
+    displayWarning(`AI analysis error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    displayInfo('💡 Run with --setup-ai to configure AI settings.');
+    return output;
+  }
+}
+
+/**
+ * Collect text files from the file tree
+ */
+function collectTextFiles(node: FileNode): FileNode[] {
+  const textFiles: FileNode[] = [];
+  
+  function traverse(n: FileNode) {
+    if (n.type === 'file' && n.content && 
+        !['[binary]', '[unreadable]'].includes(n.content)) {
+      textFiles.push(n);
+    } else if (n.type === 'directory' && n.children) {
+      n.children.forEach(traverse);
+    }
+  }
+  
+  traverse(node);
+  return textFiles;
 }
 
 /**
@@ -122,7 +286,7 @@ async function validateLocalPath(localPath: string): Promise<void> {
  * Handle output writing with various options
  */
 async function handleOutput(
-  output: any, 
+  output: DigestOutput, 
   query: DigestionQuery, 
   spinner: Ora
 ): Promise<void> {
@@ -238,6 +402,12 @@ async function runInteractiveMode(query: DigestionQuery): Promise<DigestionQuery
       name: 'stats',
       message: 'Generate separate statistics file?',
       default: query.options.stats
+    },
+    {
+      type: 'confirm',
+      name: 'aiAnalysis',
+      message: 'Enable AI-powered analysis?',
+      default: query.options.aiAnalysis
     },
     {
       type: 'input',

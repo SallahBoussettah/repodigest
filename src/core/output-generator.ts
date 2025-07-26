@@ -18,26 +18,11 @@ export class OutputGenerator {
   /**
    * Generate output in the specified format
    */
-  generate(rootNode: FileNode): DigestOutput {
+  generate(rootNode: FileNode, existingOutput?: DigestOutput): DigestOutput {
     const { format } = this.query.options;
     
-    let content: string;
-    switch (format) {
-      case 'json':
-        content = this.generateJsonOutput(rootNode);
-        break;
-      case 'markdown':
-        content = this.generateMarkdownOutput(rootNode);
-        break;
-      default:
-        content = this.generateTextOutput(rootNode);
-    }
-
-    // Calculate tokens for text content
-    this.calculateTokens(content);
-
-    return {
-      content,
+    const output: DigestOutput = existingOutput || {
+      content: '',
       stats: this.stats,
       metadata: {
         source: this.query.source,
@@ -47,12 +32,30 @@ export class OutputGenerator {
         format
       }
     };
+    
+    let content: string;
+    switch (format) {
+      case 'json':
+        content = this.generateJsonOutput(rootNode, output);
+        break;
+      case 'markdown':
+        content = this.generateMarkdownOutput(rootNode, output);
+        break;
+      default:
+        content = this.generateTextOutput(rootNode, output);
+    }
+
+    // Calculate tokens for text content
+    this.calculateTokens(content);
+
+    output.content = content;
+    return output;
   }
 
   /**
    * Generate text format output (similar to original)
    */
-  private generateTextOutput(rootNode: FileNode): string {
+  private generateTextOutput(rootNode: FileNode, output?: DigestOutput): string {
     const sections: string[] = [];
 
     // Header
@@ -60,6 +63,11 @@ export class OutputGenerator {
     
     // Summary
     sections.push(this.generateSummary());
+    
+    // AI Insights (if available)
+    if (output?.aiInsights) {
+      sections.push(this.generateAIInsights(output));
+    }
     
     // Directory structure
     sections.push(this.generateDirectoryTree(rootNode));
@@ -73,7 +81,7 @@ export class OutputGenerator {
   /**
    * Generate JSON format output
    */
-  private generateJsonOutput(rootNode: FileNode): string {
+  private generateJsonOutput(rootNode: FileNode, digestOutput?: DigestOutput): string {
     const output = {
       metadata: {
         source: this.query.source,
@@ -83,7 +91,9 @@ export class OutputGenerator {
       },
       stats: this.stats,
       structure: this.nodeToJson(rootNode),
-      files: this.extractFileContents(rootNode)
+      files: this.extractFileContents(rootNode),
+      ...(digestOutput?.aiInsights && { aiInsights: digestOutput.aiInsights }),
+      ...(digestOutput?.securityAnalysis && { securityAnalysis: digestOutput.securityAnalysis })
     };
 
     return JSON.stringify(output, null, 2);
@@ -92,7 +102,7 @@ export class OutputGenerator {
   /**
    * Generate Markdown format output
    */
-  private generateMarkdownOutput(rootNode: FileNode): string {
+  private generateMarkdownOutput(rootNode: FileNode, digestOutput?: DigestOutput): string {
     const sections: string[] = [];
 
     // Title
@@ -107,6 +117,35 @@ export class OutputGenerator {
     }
     sections.push(`- **Generated**: ${new Date().toISOString()}`);
     sections.push('');
+
+    // AI Insights
+    if (digestOutput?.aiInsights) {
+      sections.push('## AI Analysis');
+      if (digestOutput.aiInsights.overview.summary) {
+        sections.push('### Overview');
+        sections.push(digestOutput.aiInsights.overview.summary);
+        sections.push('');
+      }
+
+      if (digestOutput.aiInsights.overview.mainTechnologies?.length > 0) {
+        sections.push('### Technologies');
+        digestOutput.aiInsights.overview.mainTechnologies.forEach((tech: string) => {
+          sections.push(`- ${tech}`);
+        });
+        sections.push('');
+      }
+
+      if (digestOutput.aiInsights.recommendations?.length > 0) {
+        sections.push('### Recommendations');
+        digestOutput.aiInsights.recommendations.slice(0, 5).forEach((rec: any) => {
+          sections.push(`- **${rec.title || rec.description}** (${rec.priority || 'medium'} priority)`);
+          if (rec.description && rec.title) {
+            sections.push(`  ${rec.description}`);
+          }
+        });
+        sections.push('');
+      }
+    }
 
     // Statistics
     sections.push('## Statistics');
@@ -194,6 +233,56 @@ export class OutputGenerator {
         });
     }
 
+    return lines.join('\n');
+  }
+
+  /**
+   * Generate AI insights section
+   */
+  private generateAIInsights(output: DigestOutput): string {
+    if (!output.aiInsights) return '';
+
+    const lines = [
+      '',
+      'AI INSIGHTS',
+      OUTPUT_TEMPLATES.SECTION_SEPARATOR
+    ];
+
+    if (output.aiInsights.overview.summary) {
+      lines.push('Repository Overview:');
+      lines.push(output.aiInsights.overview.summary);
+      lines.push('');
+    }
+
+    if (output.aiInsights.overview.mainTechnologies?.length > 0) {
+      lines.push('Main Technologies:');
+      output.aiInsights.overview.mainTechnologies.forEach((tech: string) => {
+        lines.push(`  • ${tech}`);
+      });
+      lines.push('');
+    }
+
+    if (output.aiInsights.overview.keyInsights?.length > 0) {
+      lines.push('Key Insights:');
+      output.aiInsights.overview.keyInsights.forEach((insight: string) => {
+        lines.push(`  • ${insight}`);
+      });
+      lines.push('');
+    }
+
+    if (output.aiInsights.recommendations?.length > 0) {
+      lines.push('AI Recommendations:');
+      output.aiInsights.recommendations.slice(0, 5).forEach((rec: any) => {
+        lines.push(`  • [${rec.priority?.toUpperCase() || 'MEDIUM'}] ${rec.title || rec.description}`);
+        if (rec.description && rec.title) {
+          lines.push(`    ${rec.description}`);
+        }
+      });
+      lines.push('');
+    }
+
+    lines.push(`Files Analyzed by AI: ${output.aiInsights.fileAnalyses}`);
+    
     return lines.join('\n');
   }
 

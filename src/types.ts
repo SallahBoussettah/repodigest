@@ -13,6 +13,14 @@ export interface CliOptions {
   language?: string[];
   depth?: number;
   interactive: boolean;
+  // AI options
+  aiAnalysis: boolean;
+  aiSummary: boolean;
+  securityScan: boolean;
+  setupAi: boolean;
+  setApiKey?: string;
+  showAiConfig: boolean;
+  resetAiConfig: boolean;
 }
 
 export interface DigestionQuery {
@@ -59,4 +67,11 @@ export interface DigestOutput {
     version: string;
     format: string;
   };
+  aiInsights?: {
+    overview: any;
+    recommendations: any[];
+    fileAnalyses: number;
+    analysisMetadata: any;
+  };
+  securityAnalysis?: any;
 }

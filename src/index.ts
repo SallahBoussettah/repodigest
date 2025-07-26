@@ -33,49 +33,63 @@ program
   .description('🚀 Advanced codebase analysis and LLM-ready digest generation')
   .version(getPackageVersion(), '-V, --version', '📦 Show version information')
   .argument('[source]', '📁 Repository URL or local directory path')
-  
+
   // Output options
   .option('-o, --output <file>', '📤 Output file path (use "-" for stdout)', 'digest.txt')
   .option('-f, --format <type>', '📋 Output format: text, json, markdown', 'text')
   .option('--compress', '🗜️  Compress JSON output (removes formatting)', false)
   .option('--stats', '📊 Generate separate statistics file', false)
-  
+
   // Processing options
   .option('-s, --max-size <bytes>', '📐 Maximum file size to process (bytes)', '10485760')
   .option('-d, --depth <number>', '📏 Maximum directory depth to traverse')
   .option('-l, --language <languages...>', '🔤 Filter by programming languages')
-  
+
   // Repository options
   .option('-b, --branch <name>', '🌿 Git branch to clone (for remote repos)')
   .option('-t, --token <token>', '🔐 GitHub Personal Access Token (or use GITHUB_TOKEN env)')
-  
+
   // Pattern matching
   .option('--include-pattern <patterns...>', '✅ Include files matching these glob patterns')
   .option('--exclude-pattern <patterns...>', '❌ Exclude files matching these glob patterns')
   .option('--include-gitignored', '👻 Include files normally ignored by .gitignore', false)
-  
+
+  // AI options
+  .option('--ai-analysis', '🤖 Enable AI-powered code analysis', false)
+  .option('--ai-summary', '📝 Generate AI summary of the codebase', false)
+  .option('--security-scan', '🔒 Perform AI-powered security analysis', false)
+  .option('--setup-ai', '⚙️ Setup AI configuration interactively', false)
+  .option('--set-api-key <key>', '🔑 Set Gemini API key', '')
+  .option('--show-ai-config', '📋 Show current AI configuration', false)
+  .option('--reset-ai-config', '🔄 Reset AI configuration', false)
+
   // Behavior options
   .option('--force', '💪 Overwrite existing output file without confirmation', false)
   .option('-i, --interactive', '🎛️  Run in interactive mode with guided setup', false)
-  
+
   .action(async (source: string | undefined, options: CliOptions) => {
     // Show welcome message
     displayWelcome();
 
-    // Validate source argument
-    if (!source) {
+    // Check if this is an AI configuration command that doesn't need a source
+    const aiConfigCommands = options.setupAi || options.setApiKey || options.showAiConfig || options.resetAiConfig;
+
+    // Validate source argument (unless it's an AI config command)
+    if (!source && !aiConfigCommands) {
       console.log(chalk.bgRed.white.bold(' ERROR ') + ' ' + chalk.red('Missing required argument: <source>\n'));
       console.log(chalk.gray('💡 Please specify a repository URL or local directory path.\n'));
       console.log('Examples:');
       console.log(chalk.cyan('  repodigest .'));
       console.log(chalk.cyan('  repodigest https://github.com/facebook/react'));
-      console.log(chalk.cyan('  repodigest /path/to/project --format json\n'));
+      console.log(chalk.cyan('  repodigest /path/to/project --format json'));
+      console.log(chalk.cyan('  repodigest --setup-ai                    # Setup AI configuration'));
+      console.log(chalk.cyan('  repodigest --show-ai-config              # Show AI settings\n'));
       program.help();
       return;
     }
 
     try {
-      await main(source, options);
+      await main(source || '.', options);
     } catch (error) {
       displayError(error instanceof Error ? error : new Error('Unknown error occurred'));
       process.exit(1);
@@ -93,7 +107,7 @@ program.configureHelp({
 // Custom help formatting
 program.helpInformation = () => {
   const divider = chalk.gray('─'.repeat(80));
-  const section = (emoji: string, title: string) => 
+  const section = (emoji: string, title: string) =>
     `${emoji}  ${chalk.bold.hex('#00D4AA')(title.toUpperCase())}`;
 
   const help = [
@@ -145,6 +159,13 @@ program.helpInformation = () => {
     `    ${chalk.cyan('repodigest . --stats')}                   ${chalk.gray('# Generate statistics file')}`,
     `    ${chalk.cyan('repodigest . --compress --format json')}  ${chalk.gray('# Compressed JSON output')}`,
     '',
+    chalk.bold.white('  AI-Powered Analysis:'),
+    `    ${chalk.cyan('repodigest . --setup-ai')}                ${chalk.gray('# Setup AI configuration')}`,
+    `    ${chalk.cyan('repodigest . --ai-analysis')}             ${chalk.gray('# Enable AI code analysis')}`,
+    `    ${chalk.cyan('repodigest . --ai-summary')}              ${chalk.gray('# Generate AI summary')}`,
+    `    ${chalk.cyan('repodigest . --security-scan')}           ${chalk.gray('# AI security analysis')}`,
+    `    ${chalk.cyan('repodigest . --show-ai-config')}          ${chalk.gray('# Show AI configuration')}`,
+    '',
     divider,
     section('🌟', 'New Features'),
     `  ${chalk.yellow('✨')} Multiple output formats (Text, JSON, Markdown)`,
@@ -157,13 +178,14 @@ program.helpInformation = () => {
     '',
     divider,
     section('ℹ️', 'Environment Variables'),
-    `  ${chalk.cyan('GITHUB_TOKEN')}  ${chalk.gray('GitHub Personal Access Token for private repos')}`,
+    `  ${chalk.cyan('GITHUB_TOKEN')}   ${chalk.gray('GitHub Personal Access Token for private repos')}`,
+    `  ${chalk.cyan('GEMINI_API_KEY')} ${chalk.gray('Google Gemini API key for AI analysis')}`,
     '',
     divider,
     section('🔗', 'More Information'),
     `  ${chalk.cyan('👤 Author')}   → ${chalk.white('Salah Boussettah')}`,
     `  ${chalk.cyan('Repository')}  ${chalk.underline('https://github.com/SallahBoussettah/repodigest')}`,
-    `  ${chalk.cyan('Issues')}      ${chalk.underline('https://github.com/yourusername/repodigest/issues')}`,
+    `  ${chalk.cyan('Issues')}      ${chalk.underline('https://github.com/SallahBoussettah/repodigest/issues')}`,
     '',
     `  ${chalk.gray('🚀 Built to help developers and AI collaborate more effectively')}`,
     divider,
