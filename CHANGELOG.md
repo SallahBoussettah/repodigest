@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-07-26
+
+### Added
+- **🎛️ Modular Help System**: Reorganized CLI help into separate commands
+  - `repodigest examples` - Comprehensive usage examples
+  - `repodigest ai-help` - AI features and configuration help
+  - `repodigest options` - All command-line options with descriptions
+  - `repodigest features` - Complete feature overview
+  - Main help is now concise and user-friendly
+
+### Enhanced
+- **Better UX**: Reduced information overload in main help
+- **Progressive Disclosure**: Users can find specific help when needed
+- **Cleaner Error Messages**: Better guidance when missing arguments with all help command hints
+- **Command Discovery**: All available commands now visible in main help and error messages
+
+### Technical
+- Fixed TypeScript compilation errors in CLI structure
+- Improved code organization with proper function scoping
+- Enhanced error message navigation with complete command references
+
 ## [1.2.0] - 2025-01-26
 
 ### Added
@@ -144,6 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
+- **v1.3.0**: Modular Help System & Enhanced UX
 - **v1.2.0**: Major AI Integration & Enhanced Documentation
 - **v1.0.0**: Initial Release with Core Features
 
